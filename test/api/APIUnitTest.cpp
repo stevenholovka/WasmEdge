@@ -119,9 +119,9 @@ WasmEdge_ModuleInstanceContext *createExternModule
       WasmEdge_StringWrap(Name.data(), static_cast<uint32_t>(Name.length()));
   WasmEdge_ModuleInstanceContext *HostMod =
       WasmEdge_ModuleInstanceCreate(HostName);
-  enum WasmEdge_ValType Param[2] = {WasmEdge_ValType_ExternRef,
-                                    WasmEdge_ValType_I32},
-                        Result[1] = {WasmEdge_ValType_I32};
+  WasmEdge_ValType Param[2] = {WasmEdge_ValTypeGenExternRef(),
+                               WasmEdge_ValTypeGenI32()},
+                   Result[1] = {WasmEdge_ValTypeGenI32()};
   WasmEdge_FunctionTypeContext *HostFType =
       WasmEdge_FunctionTypeCreate(Param, 2, Result, 1);
   WasmEdge_FunctionInstanceContext *HostFunc = nullptr;
@@ -323,7 +323,7 @@ TEST(APICoreTest, Value) {
   Val = WasmEdge_ValueGenV128(V);
   EXPECT_TRUE(0 == std::memcmp(&V, &Val, sizeof(V)));
 #endif
-  Val = WasmEdge_ValueGenNullRef(WasmEdge_RefType_FuncRef);
+  Val = WasmEdge_ValueGenNullRef(WasmEdge_RefTypeCode_FuncRef);
   EXPECT_TRUE(WasmEdge_ValueIsNullRef(Val));
   Val = WasmEdge_ValueGenFuncRef(nullptr);
   EXPECT_EQ(WasmEdge_ValueGetFuncRef(Val), nullptr);
@@ -482,12 +482,13 @@ TEST(APICoreTest, Configure) {
 
 TEST(APICoreTest, FunctionType) {
   std::vector<WasmEdge_ValType> Param = {
-      WasmEdge_ValType_I32,  WasmEdge_ValType_I64, WasmEdge_ValType_ExternRef,
-      WasmEdge_ValType_V128, WasmEdge_ValType_F64, WasmEdge_ValType_F32};
-  std::vector<WasmEdge_ValType> Result = {WasmEdge_ValType_FuncRef,
-                                          WasmEdge_ValType_ExternRef,
-                                          WasmEdge_ValType_V128};
-  enum WasmEdge_ValType Buf1[6], Buf2[2];
+      WasmEdge_ValTypeGenI32(),       WasmEdge_ValTypeGenI64(),
+      WasmEdge_ValTypeGenExternRef(), WasmEdge_ValTypeGenV128(),
+      WasmEdge_ValTypeGenF64(),       WasmEdge_ValTypeGenF32()};
+  std::vector<WasmEdge_ValType> Result = {WasmEdge_ValTypeGenFuncRef(),
+                                          WasmEdge_ValTypeGenExternRef(),
+                                          WasmEdge_ValTypeGenV128()};
+  WasmEdge_ValType Buf1[6], Buf2[2];
   WasmEdge_FunctionTypeContext *FType =
       WasmEdge_FunctionTypeCreate(&Param[0], 6, &Result[0], 3);
   EXPECT_EQ(WasmEdge_FunctionTypeGetParametersLength(FType), 6U);
@@ -495,16 +496,22 @@ TEST(APICoreTest, FunctionType) {
   EXPECT_EQ(WasmEdge_FunctionTypeGetReturnsLength(FType), 3U);
   EXPECT_EQ(WasmEdge_FunctionTypeGetReturnsLength(nullptr), 0U);
   EXPECT_EQ(WasmEdge_FunctionTypeGetParameters(FType, Buf1, 6), 6U);
-  EXPECT_EQ(Param, std::vector<WasmEdge_ValType>(Buf1, Buf1 + 6));
+  for (uint32_t I = 0; I < 6; I++) {
+    EXPECT_TRUE(WasmEdge_ValTypeIsEqual(Param[I], Buf1[I]));
+  }
   EXPECT_EQ(WasmEdge_FunctionTypeGetParameters(FType, Buf2, 2), 6U);
-  EXPECT_EQ(std::vector<WasmEdge_ValType>(Param.cbegin(), Param.cbegin() + 2),
-            std::vector<WasmEdge_ValType>(Buf2, Buf2 + 2));
+  for (uint32_t I = 0; I < 2; I++) {
+    EXPECT_TRUE(WasmEdge_ValTypeIsEqual(Param[I], Buf2[I]));
+  }
   EXPECT_EQ(WasmEdge_FunctionTypeGetParameters(nullptr, Buf1, 6), 0U);
   EXPECT_EQ(WasmEdge_FunctionTypeGetReturns(FType, Buf1, 6), 3U);
-  EXPECT_EQ(Result, std::vector<WasmEdge_ValType>(Buf1, Buf1 + 3));
+  for (uint32_t I = 0; I < 3; I++) {
+    EXPECT_TRUE(WasmEdge_ValTypeIsEqual(Result[I], Buf1[I]));
+  }
   EXPECT_EQ(WasmEdge_FunctionTypeGetReturns(FType, Buf2, 2), 3U);
-  EXPECT_EQ(std::vector<WasmEdge_ValType>(Result.cbegin(), Result.cbegin() + 2),
-            std::vector<WasmEdge_ValType>(Buf2, Buf2 + 2));
+  for (uint32_t I = 0; I < 2; I++) {
+    EXPECT_TRUE(WasmEdge_ValTypeIsEqual(Result[I], Buf2[I]));
+  }
   EXPECT_EQ(WasmEdge_FunctionTypeGetReturns(nullptr, Buf1, 6), 0U);
   WasmEdge_FunctionTypeDelete(FType);
   WasmEdge_FunctionTypeDelete(nullptr);
@@ -520,16 +527,19 @@ TEST(APICoreTest, TableType) {
   WasmEdge_Limit Lim2 = {
       .HasMax = false, .Shared = false, .Min = 30, .Max = 30};
   WasmEdge_TableTypeContext *TType =
-      WasmEdge_TableTypeCreate(WasmEdge_RefType_ExternRef, Lim1);
-  EXPECT_EQ(WasmEdge_TableTypeGetRefType(TType), WasmEdge_RefType_ExternRef);
-  EXPECT_EQ(WasmEdge_TableTypeGetRefType(nullptr), WasmEdge_RefType_FuncRef);
+      WasmEdge_TableTypeCreate(WasmEdge_ValTypeGenExternRef(), Lim1);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(WasmEdge_TableTypeGetRefType(TType),
+                                      WasmEdge_ValTypeGenExternRef()));
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(WasmEdge_TableTypeGetRefType(nullptr),
+                                      WasmEdge_ValTypeGenFuncRef()));
   EXPECT_TRUE(WasmEdge_LimitIsEqual(WasmEdge_TableTypeGetLimit(TType), Lim1));
   EXPECT_FALSE(
       WasmEdge_LimitIsEqual(WasmEdge_TableTypeGetLimit(nullptr), Lim1));
   WasmEdge_TableTypeDelete(TType);
   WasmEdge_TableTypeDelete(nullptr);
-  TType = WasmEdge_TableTypeCreate(WasmEdge_RefType_FuncRef, Lim2);
-  EXPECT_EQ(WasmEdge_TableTypeGetRefType(TType), WasmEdge_RefType_FuncRef);
+  TType = WasmEdge_TableTypeCreate(WasmEdge_ValTypeGenFuncRef(), Lim2);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(WasmEdge_TableTypeGetRefType(TType),
+                                      WasmEdge_ValTypeGenFuncRef()));
   EXPECT_TRUE(WasmEdge_LimitIsEqual(WasmEdge_TableTypeGetLimit(TType), Lim2));
   WasmEdge_TableTypeDelete(TType);
   WasmEdge_TableTypeDelete(nullptr);
@@ -553,10 +563,12 @@ TEST(APICoreTest, MemoryType) {
 }
 
 TEST(APICoreTest, GlobalType) {
-  WasmEdge_GlobalTypeContext *GType =
-      WasmEdge_GlobalTypeCreate(WasmEdge_ValType_V128, WasmEdge_Mutability_Var);
-  EXPECT_EQ(WasmEdge_GlobalTypeGetValType(GType), WasmEdge_ValType_V128);
-  EXPECT_EQ(WasmEdge_GlobalTypeGetValType(nullptr), WasmEdge_ValType_I32);
+  WasmEdge_GlobalTypeContext *GType = WasmEdge_GlobalTypeCreate(
+      WasmEdge_ValTypeGenV128(), WasmEdge_Mutability_Var);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(WasmEdge_GlobalTypeGetValType(GType),
+                                      WasmEdge_ValTypeGenV128()));
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(WasmEdge_GlobalTypeGetValType(nullptr),
+                                      WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(WasmEdge_GlobalTypeGetMutability(GType), WasmEdge_Mutability_Var);
   EXPECT_EQ(WasmEdge_GlobalTypeGetMutability(nullptr),
             WasmEdge_Mutability_Const);
@@ -707,9 +719,10 @@ TEST(APICoreTest, ImportType) {
   EXPECT_EQ(WasmEdge_ImportTypeGetTableType(nullptr, ImpTypes[11]), nullptr);
   EXPECT_EQ(WasmEdge_ImportTypeGetTableType(Mod, ImpTypes[0]), nullptr);
   EXPECT_NE(WasmEdge_ImportTypeGetTableType(Mod, ImpTypes[11]), nullptr);
-  EXPECT_EQ(WasmEdge_TableTypeGetRefType(
-                WasmEdge_ImportTypeGetTableType(Mod, ImpTypes[11])),
-            WasmEdge_RefType_ExternRef);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(
+      WasmEdge_TableTypeGetRefType(
+          WasmEdge_ImportTypeGetTableType(Mod, ImpTypes[11])),
+      WasmEdge_ValTypeGenExternRef()));
   Lim = {.HasMax = true, .Shared = false, .Min = 10, .Max = 30};
   EXPECT_TRUE(WasmEdge_LimitIsEqual(
       WasmEdge_TableTypeGetLimit(
@@ -734,9 +747,10 @@ TEST(APICoreTest, ImportType) {
   EXPECT_EQ(WasmEdge_ImportTypeGetGlobalType(nullptr, ImpTypes[7]), nullptr);
   EXPECT_EQ(WasmEdge_ImportTypeGetGlobalType(Mod, ImpTypes[0]), nullptr);
   EXPECT_NE(WasmEdge_ImportTypeGetGlobalType(Mod, ImpTypes[7]), nullptr);
-  EXPECT_EQ(WasmEdge_GlobalTypeGetValType(
-                WasmEdge_ImportTypeGetGlobalType(Mod, ImpTypes[7])),
-            WasmEdge_ValType_I64);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(
+      WasmEdge_GlobalTypeGetValType(
+          WasmEdge_ImportTypeGetGlobalType(Mod, ImpTypes[7])),
+      WasmEdge_ValTypeGenI64()));
   EXPECT_EQ(WasmEdge_GlobalTypeGetMutability(
                 WasmEdge_ImportTypeGetGlobalType(Mod, ImpTypes[7])),
             WasmEdge_Mutability_Const);
@@ -863,9 +877,10 @@ TEST(APICoreTest, ExportType) {
   EXPECT_EQ(WasmEdge_ExportTypeGetTableType(nullptr, ExpTypes[12]), nullptr);
   EXPECT_EQ(WasmEdge_ExportTypeGetTableType(Mod, ExpTypes[0]), nullptr);
   EXPECT_NE(WasmEdge_ExportTypeGetTableType(Mod, ExpTypes[12]), nullptr);
-  EXPECT_EQ(WasmEdge_TableTypeGetRefType(
-                WasmEdge_ExportTypeGetTableType(Mod, ExpTypes[12])),
-            WasmEdge_RefType_ExternRef);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(
+      WasmEdge_TableTypeGetRefType(
+          WasmEdge_ExportTypeGetTableType(Mod, ExpTypes[12])),
+      WasmEdge_ValTypeGenExternRef()));
   Lim = {.HasMax = false, .Shared = false, .Min = 10, .Max = 10};
   EXPECT_TRUE(WasmEdge_LimitIsEqual(
       WasmEdge_TableTypeGetLimit(
@@ -890,9 +905,10 @@ TEST(APICoreTest, ExportType) {
   EXPECT_EQ(WasmEdge_ExportTypeGetGlobalType(nullptr, ExpTypes[15]), nullptr);
   EXPECT_EQ(WasmEdge_ExportTypeGetGlobalType(Mod, ExpTypes[0]), nullptr);
   EXPECT_NE(WasmEdge_ExportTypeGetGlobalType(Mod, ExpTypes[15]), nullptr);
-  EXPECT_EQ(WasmEdge_GlobalTypeGetValType(
-                WasmEdge_ExportTypeGetGlobalType(Mod, ExpTypes[15])),
-            WasmEdge_ValType_F32);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(
+      WasmEdge_GlobalTypeGetValType(
+          WasmEdge_ExportTypeGetGlobalType(Mod, ExpTypes[15])),
+      WasmEdge_ValTypeGenF32()));
   EXPECT_EQ(WasmEdge_GlobalTypeGetMutability(
                 WasmEdge_ExportTypeGetGlobalType(Mod, ExpTypes[15])),
             WasmEdge_Mutability_Const);
@@ -1286,9 +1302,9 @@ TEST(APICoreTest, ExecutorWithStatistics) {
   EXPECT_TRUE(
       WasmEdge_ResultOK(WasmEdge_ExecutorInvoke(ExecCxt, FuncCxt, P, 2, R, 2)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_TRUE(
       isErrMatch(WasmEdge_ErrCode_WrongVMWorkflow,
                  WasmEdge_ExecutorInvoke(nullptr, FuncCxt, P, 2, R, 2)));
@@ -1318,7 +1334,7 @@ TEST(APICoreTest, ExecutorWithStatistics) {
   EXPECT_TRUE(
       WasmEdge_ResultOK(WasmEdge_ExecutorInvoke(ExecCxt, FuncCxt, P, 2, R, 1)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_ExecutorInvoke(ExecCxt, FuncCxt, P, 2, nullptr, 0)));
@@ -1352,7 +1368,7 @@ TEST(APICoreTest, ExecutorWithStatistics) {
   EXPECT_TRUE(
       WasmEdge_ResultOK(WasmEdge_ExecutorInvoke(ExecCxt, FuncCxt, P, 1, R, 1)));
   EXPECT_EQ(1000, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   // Call sub: (123) - (456)
   FuncName = WasmEdge_StringCreateByCString("func-host-sub");
   FuncCxt = WasmEdge_ModuleInstanceFindFunction(ModCxt, FuncName);
@@ -1363,7 +1379,7 @@ TEST(APICoreTest, ExecutorWithStatistics) {
   EXPECT_TRUE(
       WasmEdge_ResultOK(WasmEdge_ExecutorInvoke(ExecCxt, FuncCxt, P, 1, R, 1)));
   EXPECT_EQ(-333, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   // Call mul: (-30) * (-66)
   FuncName = WasmEdge_StringCreateByCString("func-host-mul");
   FuncCxt = WasmEdge_ModuleInstanceFindFunction(ModCxt, FuncName);
@@ -1374,7 +1390,7 @@ TEST(APICoreTest, ExecutorWithStatistics) {
   EXPECT_TRUE(
       WasmEdge_ResultOK(WasmEdge_ExecutorInvoke(ExecCxt, FuncCxt, P, 1, R, 1)));
   EXPECT_EQ(1980, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   // Call div: (-9999) / (1234)
   FuncName = WasmEdge_StringCreateByCString("func-host-div");
   FuncCxt = WasmEdge_ModuleInstanceFindFunction(ModCxt, FuncName);
@@ -1385,7 +1401,7 @@ TEST(APICoreTest, ExecutorWithStatistics) {
   EXPECT_TRUE(
       WasmEdge_ResultOK(WasmEdge_ExecutorInvoke(ExecCxt, FuncCxt, P, 1, R, 1)));
   EXPECT_EQ(-8, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
 
   // Invoke functions of registered module
   FuncName = WasmEdge_StringCreateByCString("func-add");
@@ -1398,7 +1414,7 @@ TEST(APICoreTest, ExecutorWithStatistics) {
   EXPECT_TRUE(
       WasmEdge_ResultOK(WasmEdge_ExecutorInvoke(ExecCxt, FuncCxt, P, 2, R, 1)));
   EXPECT_EQ(6500, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
 
   // Invoke host function to terminate or fail execution
   FuncName = WasmEdge_StringCreateByCString("func-term");
@@ -1426,7 +1442,7 @@ TEST(APICoreTest, ExecutorWithStatistics) {
   EXPECT_TRUE(
       WasmEdge_ResultOK(WasmEdge_ExecutorInvoke(ExecCxt, FuncCxt, P, 2, R, 1)));
   EXPECT_EQ(-266, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   FuncName = WasmEdge_StringCreateByCString("func-term");
   FuncCxt = WasmEdge_ModuleInstanceFindFunction(HostModWrap, FuncName);
   EXPECT_NE(FuncCxt, nullptr);
@@ -1649,10 +1665,10 @@ TEST(APICoreTest, Instance) {
 
   // Function instance
   WasmEdge_FunctionInstanceContext *FuncCxt;
-  enum WasmEdge_ValType Param[2], Result[1];
-  Param[0] = WasmEdge_ValType_ExternRef;
-  Param[1] = WasmEdge_ValType_I32;
-  Result[0] = WasmEdge_ValType_I32;
+  WasmEdge_ValType Param[2], Result[1];
+  Param[0] = WasmEdge_ValTypeGenExternRef();
+  Param[1] = WasmEdge_ValTypeGenI32();
+  Result[0] = WasmEdge_ValTypeGenI32();
   WasmEdge_FunctionTypeContext *FuncType =
       WasmEdge_FunctionTypeCreate(Param, 2, Result, 1);
 
@@ -1704,7 +1720,7 @@ TEST(APICoreTest, Instance) {
   TabCxt = WasmEdge_TableInstanceCreate(nullptr);
   EXPECT_EQ(TabCxt, nullptr);
   TabType = WasmEdge_TableTypeCreate(
-      WasmEdge_RefType_ExternRef,
+      WasmEdge_ValTypeGenExternRef(),
       WasmEdge_Limit{.HasMax = false, .Shared = false, .Min = 10, .Max = 10});
   TabCxt = WasmEdge_TableInstanceCreate(TabType);
   WasmEdge_TableTypeDelete(TabType);
@@ -1712,16 +1728,16 @@ TEST(APICoreTest, Instance) {
   WasmEdge_TableInstanceDelete(TabCxt);
   EXPECT_TRUE(true);
   TabType = WasmEdge_TableTypeCreate(
-      WasmEdge_RefType_ExternRef,
+      WasmEdge_ValTypeGenExternRef(),
       WasmEdge_Limit{.HasMax = true, .Shared = false, .Min = 10, .Max = 20});
   TabCxt = WasmEdge_TableInstanceCreate(TabType);
   WasmEdge_TableTypeDelete(TabType);
   EXPECT_NE(TabCxt, nullptr);
 
   // Table instance get table type
-  EXPECT_EQ(
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(
       WasmEdge_TableTypeGetRefType(WasmEdge_TableInstanceGetTableType(TabCxt)),
-      WasmEdge_RefType_ExternRef);
+      WasmEdge_ValTypeGenExternRef()));
   EXPECT_EQ(WasmEdge_TableInstanceGetTableType(nullptr), nullptr);
 
   // Table instance set data
@@ -1890,15 +1906,15 @@ TEST(APICoreTest, Instance) {
   // Global instance creation
   GlobVCxt = WasmEdge_GlobalInstanceCreate(nullptr, WasmEdge_ValueGenI32(0));
   EXPECT_EQ(GlobVCxt, nullptr);
-  GlobVType =
-      WasmEdge_GlobalTypeCreate(WasmEdge_ValType_F32, WasmEdge_Mutability_Var);
+  GlobVType = WasmEdge_GlobalTypeCreate(WasmEdge_ValTypeGenF32(),
+                                        WasmEdge_Mutability_Var);
   GlobVCxt = WasmEdge_GlobalInstanceCreate(GlobVType, WasmEdge_ValueGenI32(0));
   WasmEdge_GlobalTypeDelete(GlobVType);
   EXPECT_EQ(GlobVCxt, nullptr);
-  GlobCType = WasmEdge_GlobalTypeCreate(WasmEdge_ValType_I64,
+  GlobCType = WasmEdge_GlobalTypeCreate(WasmEdge_ValTypeGenI64(),
                                         WasmEdge_Mutability_Const);
-  GlobVType =
-      WasmEdge_GlobalTypeCreate(WasmEdge_ValType_I64, WasmEdge_Mutability_Var);
+  GlobVType = WasmEdge_GlobalTypeCreate(WasmEdge_ValTypeGenI64(),
+                                        WasmEdge_Mutability_Var);
   GlobCCxt = WasmEdge_GlobalInstanceCreate(GlobCType,
                                            WasmEdge_ValueGenI64(55555555555LL));
   GlobVCxt = WasmEdge_GlobalInstanceCreate(GlobVType,
@@ -1909,12 +1925,14 @@ TEST(APICoreTest, Instance) {
   EXPECT_NE(GlobVCxt, nullptr);
 
   // Global instance get global type
-  EXPECT_EQ(WasmEdge_GlobalTypeGetValType(
-                WasmEdge_GlobalInstanceGetGlobalType(GlobCCxt)),
-            WasmEdge_ValType_I64);
-  EXPECT_EQ(WasmEdge_GlobalTypeGetValType(
-                WasmEdge_GlobalInstanceGetGlobalType(GlobVCxt)),
-            WasmEdge_ValType_I64);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(
+      WasmEdge_GlobalTypeGetValType(
+          WasmEdge_GlobalInstanceGetGlobalType(GlobCCxt)),
+      WasmEdge_ValTypeGenI64()));
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(
+      WasmEdge_GlobalTypeGetValType(
+          WasmEdge_GlobalInstanceGetGlobalType(GlobVCxt)),
+      WasmEdge_ValTypeGenI64()));
   EXPECT_EQ(WasmEdge_GlobalTypeGetMutability(
                 WasmEdge_GlobalInstanceGetGlobalType(GlobCCxt)),
             WasmEdge_Mutability_Const);
@@ -1969,7 +1987,7 @@ TEST(APICoreTest, ModuleInstance) {
   WasmEdge_TableInstanceContext *HostTable = nullptr;
   WasmEdge_MemoryInstanceContext *HostMemory = nullptr;
   WasmEdge_GlobalInstanceContext *HostGlobal = nullptr;
-  enum WasmEdge_ValType Param[2], Result[1];
+  WasmEdge_ValType Param[2], Result[1];
 
   // Create module instance with name ""
   HostMod = WasmEdge_ModuleInstanceCreate({.Length = 0, .Buf = nullptr});
@@ -1985,9 +2003,9 @@ TEST(APICoreTest, ModuleInstance) {
   WasmEdge_StringDelete(HostName);
 
   // Add host function "func-add": {externref, i32} -> {i32}
-  Param[0] = WasmEdge_ValType_ExternRef;
-  Param[1] = WasmEdge_ValType_I32;
-  Result[0] = WasmEdge_ValType_I32;
+  Param[0] = WasmEdge_ValTypeGenExternRef();
+  Param[1] = WasmEdge_ValTypeGenI32();
+  Result[0] = WasmEdge_ValTypeGenI32();
   HostFType = WasmEdge_FunctionTypeCreate(Param, 2, Result, 1);
   HostFunc = WasmEdge_FunctionInstanceCreate(HostFType, ExternAdd, nullptr, 0);
   EXPECT_NE(HostFunc, nullptr);
@@ -2004,7 +2022,7 @@ TEST(APICoreTest, ModuleInstance) {
   // Add host table "table"
   WasmEdge_Limit TabLimit = {
       .HasMax = true, .Shared = false, .Min = 10, .Max = 20};
-  HostTType = WasmEdge_TableTypeCreate(WasmEdge_RefType_FuncRef, TabLimit);
+  HostTType = WasmEdge_TableTypeCreate(WasmEdge_ValTypeGenFuncRef(), TabLimit);
   HostTable = WasmEdge_TableInstanceCreate(HostTType);
   EXPECT_NE(HostTable, nullptr);
   HostName = WasmEdge_StringCreateByCString("table");
@@ -2034,7 +2052,7 @@ TEST(APICoreTest, ModuleInstance) {
   WasmEdge_StringDelete(HostName);
 
   // Add host global "global_i32": const 666
-  HostGType = WasmEdge_GlobalTypeCreate(WasmEdge_ValType_I32,
+  HostGType = WasmEdge_GlobalTypeCreate(WasmEdge_ValTypeGenI32(),
                                         WasmEdge_Mutability_Const);
   HostGlobal =
       WasmEdge_GlobalInstanceCreate(HostGType, WasmEdge_ValueGenI32(666));
@@ -2168,9 +2186,9 @@ TEST(APICoreTest, Async) {
   EXPECT_EQ(WasmEdge_AsyncGetReturnsLength(Async), 2);
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 2)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   WasmEdge_AsyncDelete(Async);
   // VM nullptr case
   Async = WasmEdge_VMAsyncRunWasmFromFile(nullptr, TPath, FuncName, P, 2);
@@ -2221,9 +2239,9 @@ TEST(APICoreTest, Async) {
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 1)));
   WasmEdge_AsyncDelete(Async);
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(0, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   Async = WasmEdge_VMAsyncRunWasmFromFile(VM, TPath, FuncName, P, 2);
   EXPECT_NE(Async, nullptr);
@@ -2246,9 +2264,9 @@ TEST(APICoreTest, Async) {
   EXPECT_EQ(WasmEdge_AsyncGetReturnsLength(Async), 2);
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 2)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   WasmEdge_AsyncDelete(Async);
   // VM nullptr case
   Async = WasmEdge_VMAsyncRunWasmFromBuffer(
@@ -2306,9 +2324,9 @@ TEST(APICoreTest, Async) {
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 1)));
   WasmEdge_AsyncDelete(Async);
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(0, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   Async = WasmEdge_VMAsyncRunWasmFromBuffer(
       VM, Buf.data(), static_cast<uint32_t>(Buf.size()), FuncName, P, 2);
@@ -2332,9 +2350,9 @@ TEST(APICoreTest, Async) {
   EXPECT_EQ(WasmEdge_AsyncGetReturnsLength(Async), 2);
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 2)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   WasmEdge_AsyncDelete(Async);
   // VM nullptr case
   Async = WasmEdge_VMAsyncRunWasmFromASTModule(nullptr, Mod, FuncName, P, 2);
@@ -2382,9 +2400,9 @@ TEST(APICoreTest, Async) {
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 1)));
   WasmEdge_AsyncDelete(Async);
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(0, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   Async = WasmEdge_VMAsyncRunWasmFromASTModule(VM, Mod, FuncName, P, 2);
   EXPECT_NE(Async, nullptr);
@@ -2430,9 +2448,9 @@ TEST(APICoreTest, Async) {
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 2)));
   WasmEdge_AsyncDelete(Async);
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   // VM nullptr case
   Async = WasmEdge_VMAsyncExecute(nullptr, FuncName, P, 2);
   EXPECT_EQ(Async, nullptr);
@@ -2476,9 +2494,9 @@ TEST(APICoreTest, Async) {
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 1)));
   WasmEdge_AsyncDelete(Async);
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(0, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   Async = WasmEdge_VMAsyncExecute(VM, FuncName, P, 2);
   EXPECT_NE(Async, nullptr);
@@ -2505,9 +2523,9 @@ TEST(APICoreTest, Async) {
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 2)));
   WasmEdge_AsyncDelete(Async);
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   // VM nullptr case
   Async = WasmEdge_VMAsyncExecuteRegistered(nullptr, ModName, FuncName, P, 2);
   EXPECT_EQ(Async, nullptr);
@@ -2557,9 +2575,9 @@ TEST(APICoreTest, Async) {
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_AsyncGet(Async, R, 1)));
   WasmEdge_AsyncDelete(Async);
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(0, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   Async = WasmEdge_VMAsyncExecuteRegistered(VM, ModName, FuncName, P, 2);
   EXPECT_NE(Async, nullptr);
@@ -2678,9 +2696,9 @@ TEST(APICoreTest, VM) {
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_VMRunWasmFromFile(VM, TPath, FuncName, P, 2, R, 2)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_TRUE(isErrMatch(
       WasmEdge_ErrCode_WrongVMWorkflow,
       WasmEdge_VMRunWasmFromFile(nullptr, TPath, FuncName, P, 2, R, 2)));
@@ -2714,7 +2732,7 @@ TEST(APICoreTest, VM) {
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_VMRunWasmFromFile(VM, TPath, FuncName, P, 2, R, 1)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_VMRunWasmFromFile(VM, TPath, FuncName, P, 2, nullptr, 0)));
@@ -2729,9 +2747,9 @@ TEST(APICoreTest, VM) {
       VM, Buf.data(), static_cast<uint32_t>(Buf.size()), FuncName, P, 2, R,
       2)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_TRUE(
       isErrMatch(WasmEdge_ErrCode_WrongVMWorkflow,
                  WasmEdge_VMRunWasmFromBuffer(nullptr, Buf.data(),
@@ -2773,7 +2791,7 @@ TEST(APICoreTest, VM) {
       VM, Buf.data(), static_cast<uint32_t>(Buf.size()), FuncName, P, 2, R,
       1)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_VMRunWasmFromBuffer(
       VM, Buf.data(), static_cast<uint32_t>(Buf.size()), FuncName, P, 2,
@@ -2789,9 +2807,9 @@ TEST(APICoreTest, VM) {
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_VMRunWasmFromASTModule(VM, Mod, FuncName, P, 2, R, 2)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_TRUE(isErrMatch(
       WasmEdge_ErrCode_WrongVMWorkflow,
       WasmEdge_VMRunWasmFromASTModule(nullptr, Mod, FuncName, P, 2, R, 2)));
@@ -2825,7 +2843,7 @@ TEST(APICoreTest, VM) {
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_VMRunWasmFromASTModule(VM, Mod, FuncName, P, 2, R, 1)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_VMRunWasmFromASTModule(VM, Mod, FuncName, P, 2, nullptr, 0)));
@@ -2922,9 +2940,9 @@ TEST(APICoreTest, VM) {
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_VMInstantiate(VM)));
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_VMExecute(VM, FuncName, P, 2, R, 2)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_TRUE(isErrMatch(WasmEdge_ErrCode_WrongVMWorkflow,
                          WasmEdge_VMExecute(nullptr, FuncName, P, 2, R, 2)));
   // Function type mismatch
@@ -2948,7 +2966,7 @@ TEST(APICoreTest, VM) {
   R[0] = WasmEdge_ValueGenI32(0);
   EXPECT_TRUE(WasmEdge_ResultOK(WasmEdge_VMExecute(VM, FuncName, P, 2, R, 1)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   EXPECT_TRUE(
       WasmEdge_ResultOK(WasmEdge_VMExecute(VM, FuncName, P, 2, nullptr, 0)));
@@ -2967,9 +2985,9 @@ TEST(APICoreTest, VM) {
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_VMExecuteRegistered(VM, ModName, FuncName, P, 2, R, 2)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_EQ(912, WasmEdge_ValueGetI32(R[1]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[1].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[1].Type, WasmEdge_ValTypeGenI32()));
   EXPECT_TRUE(isErrMatch(
       WasmEdge_ErrCode_WrongVMWorkflow,
       WasmEdge_VMExecuteRegistered(nullptr, ModName, FuncName, P, 2, R, 2)));
@@ -3004,7 +3022,7 @@ TEST(APICoreTest, VM) {
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_VMExecuteRegistered(VM, ModName, FuncName, P, 2, R, 1)));
   EXPECT_EQ(246, WasmEdge_ValueGetI32(R[0]));
-  EXPECT_EQ(WasmEdge_ValType_I32, R[0].Type.TypeCode);
+  EXPECT_TRUE(WasmEdge_ValTypeIsEqual(R[0].Type, WasmEdge_ValTypeGenI32()));
   // Discard result
   EXPECT_TRUE(WasmEdge_ResultOK(
       WasmEdge_VMExecuteRegistered(VM, ModName, FuncName, P, 2, nullptr, 0)));
